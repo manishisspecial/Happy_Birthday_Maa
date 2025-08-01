@@ -5,62 +5,87 @@ const BackgroundMusic: React.FC = () => {
   const [volume, setVolume] = useState(0.3);
   const [showControls, setShowControls] = useState(false);
   const [hasAttemptedAutoPlay, setHasAttemptedAutoPlay] = useState(false);
+  const [showAutoPlayPrompt, setShowAutoPlayPrompt] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Auto-play on component mount
+  // Aggressive auto-play strategy
   useEffect(() => {
     if (audioRef.current && !hasAttemptedAutoPlay) {
       audioRef.current.volume = volume;
       audioRef.current.loop = true;
+      audioRef.current.muted = false;
       
-      // Try to auto-play immediately
       const attemptAutoPlay = async () => {
         try {
           await audioRef.current?.play();
           setIsPlaying(true);
           setHasAttemptedAutoPlay(true);
+          setShowAutoPlayPrompt(false);
+          console.log('Auto-play successful!');
         } catch (error) {
-          console.log('Auto-play prevented. Waiting for user interaction...');
+          console.log('Auto-play failed:', error);
           setHasAttemptedAutoPlay(true);
+          // Don't show prompt immediately, wait a bit
+          setTimeout(() => {
+            if (!isPlaying) {
+              setShowAutoPlayPrompt(true);
+            }
+          }, 2000);
         }
       };
       
+      // Try immediately
       attemptAutoPlay();
+      
+      // Try after delays
+      const delays = [500, 1000, 2000, 3000];
+      delays.forEach(delay => {
+        setTimeout(() => {
+          if (!isPlaying && !hasAttemptedAutoPlay) {
+            attemptAutoPlay();
+          }
+        }, delay);
+      });
     }
-  }, [volume, hasAttemptedAutoPlay]);
+  }, [volume, hasAttemptedAutoPlay, isPlaying]);
 
-  // Listen for user interaction to enable auto-play
+  // Global user interaction handler - this is the key part
   useEffect(() => {
-    const handleUserInteraction = async () => {
-      if (audioRef.current && !isPlaying && hasAttemptedAutoPlay) {
+    const handleAnyInteraction = async () => {
+      if (audioRef.current && !isPlaying) {
         try {
           await audioRef.current.play();
           setIsPlaying(true);
+          setShowAutoPlayPrompt(false);
+          console.log('Music started on interaction!');
         } catch (error) {
-          console.log('Playback failed on user interaction:', error);
+          console.log('Playback failed on interaction:', error);
         }
       }
     };
 
-    // Add event listeners for user interaction
-    const events = ['click', 'touchstart', 'keydown', 'mousedown'];
+    // Listen for ANY user interaction on the entire page
+    const events = ['click', 'touchstart', 'keydown', 'mousedown', 'scroll', 'focus', 'pointerdown', 'mouseenter', 'mouseover'];
     events.forEach(event => {
-      document.addEventListener(event, handleUserInteraction, { once: true });
+      document.addEventListener(event, handleAnyInteraction, { once: false });
     });
 
     return () => {
       events.forEach(event => {
-        document.removeEventListener(event, handleUserInteraction);
+        document.removeEventListener(event, handleAnyInteraction);
       });
     };
-  }, [isPlaying, hasAttemptedAutoPlay]);
+  }, [isPlaying]);
 
   // Handle audio events
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const handlePlay = () => setIsPlaying(true);
+    const handlePlay = () => {
+      setIsPlaying(true);
+      setShowAutoPlayPrompt(false);
+    };
     const handlePause = () => setIsPlaying(false);
     const handleEnded = () => setIsPlaying(false);
 
@@ -103,30 +128,63 @@ const BackgroundMusic: React.FC = () => {
         ref={audioRef}
         src="/Tu Kitni Achhi Hai - Raja Aur Runk 128 Kbps.mp3"
         preload="auto"
+        autoPlay
       />
+      
+      {/* Auto-play prompt - less intrusive */}
+      {showAutoPlayPrompt && !isPlaying && (
+        <div className="fixed bottom-4 right-4 z-50 bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-lavender-200 max-w-sm">
+          <div className="flex items-center space-x-3">
+            <div className="text-2xl">🎵</div>
+            <div className="flex-1">
+              <p className="text-sm text-lavender-800 font-medium">Background Music Ready</p>
+              <p className="text-xs text-lavender-600">Click anywhere to start</p>
+            </div>
+            <button
+              onClick={togglePlay}
+              className="px-3 py-1 bg-gradient-to-r from-lavender-200 to-peach-200 hover:from-lavender-300 hover:to-peach-300 rounded-lg text-xs font-medium text-lavender-800 transition-all duration-200"
+            >
+              Play
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Music Control Button */}
       <button
         onClick={() => setShowControls(!showControls)}
-        className="fixed top-4 right-4 z-50 p-3 bg-lavender-200 hover:bg-lavender-300 rounded-full shadow-lg transition-all duration-200"
-        title="Music Controls"
+        className={`fixed top-4 right-4 z-50 p-3 rounded-full shadow-lg transition-all duration-200 ${
+          isPlaying 
+            ? 'bg-green-200 hover:bg-green-300' 
+            : hasAttemptedAutoPlay 
+              ? 'bg-yellow-200 hover:bg-yellow-300'
+              : 'bg-lavender-200 hover:bg-lavender-300'
+        }`}
+        title={isPlaying ? "Music is playing" : hasAttemptedAutoPlay ? "Click to play music" : "Loading music..."}
       >
-        <svg className="w-6 h-6 text-lavender-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+        <svg className={`w-6 h-6 ${
+          isPlaying 
+            ? 'text-green-700' 
+            : hasAttemptedAutoPlay 
+              ? 'text-yellow-700'
+              : 'text-lavender-700'
+        }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
         </svg>
+        {!isPlaying && !hasAttemptedAutoPlay && (
+          <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+        )}
       </button>
 
       {/* Music Controls Panel */}
       {showControls && (
         <div className="fixed top-16 right-4 z-50 bg-white/90 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-lavender-200 min-w-64">
           <div className="space-y-4">
-            {/* Title */}
             <div className="text-center">
               <h3 className="text-lg font-semibold text-lavender-800 mb-1">Background Music</h3>
               <p className="text-sm text-lavender-600">Tu Kitni Achhi Hai</p>
             </div>
 
-            {/* Play/Pause Button */}
             <button
               onClick={togglePlay}
               className="w-full py-3 px-4 bg-gradient-to-r from-lavender-200 to-peach-200 hover:from-lavender-300 hover:to-peach-300 rounded-lg font-medium text-lavender-800 transition-all duration-200 flex items-center justify-center space-x-2"
@@ -148,7 +206,6 @@ const BackgroundMusic: React.FC = () => {
               )}
             </button>
 
-            {/* Volume Control */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-lavender-700">Volume</label>
               <input
@@ -167,12 +224,11 @@ const BackgroundMusic: React.FC = () => {
               </div>
             </div>
 
-            {/* Status Note */}
             <div className="text-xs text-lavender-600 text-center bg-lavender-50 rounded-lg p-2">
               {isPlaying ? (
                 <span>🎵 Music is playing in the background</span>
               ) : hasAttemptedAutoPlay ? (
-                <span>💡 Click play to start the beautiful background music</span>
+                <span>💡 Click anywhere on the page to start music</span>
               ) : (
                 <span>⏳ Loading music...</span>
               )}

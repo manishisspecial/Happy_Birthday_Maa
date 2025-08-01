@@ -14,16 +14,17 @@ function App() {
     setCurrentPage(page);
   };
 
-  // Handle user interaction to enable audio
+  // Enhanced user interaction detection to enable audio
   useEffect(() => {
     const handleUserInteraction = () => {
       if (!hasUserInteracted) {
         setHasUserInteracted(true);
+        console.log('User interaction detected - audio should now be enabled');
       }
     };
 
-    // Listen for any user interaction
-    const events = ['click', 'touchstart', 'keydown', 'mousedown', 'scroll', 'focus'];
+    // Listen for any user interaction with more comprehensive events
+    const events = ['click', 'touchstart', 'keydown', 'mousedown', 'scroll', 'focus', 'pointerdown', 'mouseenter'];
     events.forEach(event => {
       document.addEventListener(event, handleUserInteraction, { once: true });
     });
@@ -32,15 +33,25 @@ function App() {
     const handleWindowFocus = () => {
       if (!hasUserInteracted) {
         setHasUserInteracted(true);
+        console.log('Window focus detected - audio should now be enabled');
       }
     };
     window.addEventListener('focus', handleWindowFocus, { once: true });
+
+    // Try to enable audio on page load after a short delay
+    const timeoutId = setTimeout(() => {
+      if (!hasUserInteracted) {
+        setHasUserInteracted(true);
+        console.log('Timeout reached - enabling audio');
+      }
+    }, 2000);
 
     return () => {
       events.forEach(event => {
         document.removeEventListener(event, handleUserInteraction);
       });
       window.removeEventListener('focus', handleWindowFocus);
+      clearTimeout(timeoutId);
     };
   }, [hasUserInteracted]);
 
